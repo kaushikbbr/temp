@@ -1,0 +1,109 @@
+## we are not using this yml file since we are not going with any tests 
+
+name: Dev Deployment-sampled
+on:
+     push: 
+        branches: 
+            - develop
+# on:
+#    workflow_dispatch
+
+env:
+  PROJECT_NAME: "Mars-DNA"
+  PYTHON_VERSION: 3.8
+  
+  projectDirBe: 'SRM'
+  
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+
+  
+    Test-Fundamentum:
+        runs-on: ubuntu-latest
+        name: Execute Python TestCases
+        environment: Development
+        
+        steps:
+            # Check out code from branch
+          - name: Checkout
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0  
+              
+          - name: Set up Java
+            uses: actions/setup-java@v3
+            with:
+               distribution: 'temurin'
+               java-version: '11' # Adjust based on your Java version
+
+            # install python (version specified in env)
+          - name: Install Python
+            uses: actions/setup-python@v5
+            with:
+              python-version: ${{ env.PYTHON_VERSION }}
+
+        #     # install dependency from requirements.txt
+          - name: Install Dependencies
+            run: |
+              python -m pip install --upgrade pip
+              pip install -r requirements.txt
+        #      # Run pytest (also generate xml data for coverage and test results)
+          - name: Run Pytests
+            run: |
+              python -m pytest -v SRM/tests \
+                --junitxml=junit/test-results.xml \
+                --cov=SRM/ \
+                --cov=SRM/FR \
+                --cov-report=xml:coverage.xml \
+                --cov-report=html \
+                --cov-report=term 
+                
+
+             # python -m pytest SRM/tests --cov=SRM --cov-report=xml:coverage.xml
+
+
+           
+
+        #     # Publish Test Results to actions page
+          - name: Publish Test Result
+            uses: pmeier/pytest-results-action@main
+            with:
+              path: '**/test-results.xml'
+              summary: true
+              display-options: fEX
+              fail-on-empty: true
+              title: Test results
+
+        #   # Publish Coverage xml to artifacts
+          - name: Publish Coverage Report to Artifact
+            uses: actions/upload-artifact@v4
+            with:
+              name: ${{ format('{0}_Coverage', env.PROJECT_NAME) }}
+              path: coverage.xml
+
+        #     # Publish Coverage report to actions page
+          - name: Get Cover 
+            uses: orgoro/coverage@v3.2
+            with:
+                coverageFile: coverage.xml
+                token: ${{ secrets.GITHUB_TOKEN }}
+          - name: Download Coverage Report Artifact
+            uses: actions/download-artifact@v4
+            with:
+              name: ${{ format('{0}_Coverage', env.PROJECT_NAME) }}
+              path: .
+
+
+          - name: SonarScan
+            uses: sonarsource/sonarqube-scan-action@master
+            env:
+              SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_DATABRICKS }}  
+              SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+            with:
+             args: -Dproject.settings=${{ env.projectDirBe }}/sonar-project.properties -Dsonar.projectKey=SRM-EU-FOODS-DATABRICKS -Dsonar.projectBaseDir=${{ env.projectDirBe }} -Dsonar.python.coverage.reportPaths=coverage.xml
+               
+             
